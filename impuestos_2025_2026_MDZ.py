@@ -31,7 +31,7 @@ ingresos_anuales = st.sidebar.slider(
     max_value=5_000_000_000.0,
     value=400_000_000.0,
     step=1_000_000.0,
-    format="$%f"
+    format="%.0f"  # CORRECCIÓN AQUÍ: Eliminado el '$' y usando '%.0f' para números enteros
 )
 
 st.sidebar.subheader("Tus Alícuotas de IIBB (%)")
@@ -46,10 +46,16 @@ with col3:
 # --- Widgets de Otros Impuestos y Beneficios ---
 st.sidebar.subheader("Otros Impuestos Anuales")
 impuesto_inmobiliario = st.sidebar.number_input(
-    'Impuesto Inmobiliario Anual Total:', value=500000.0, step=1000.0, format="$%f"
+    'Impuesto Inmobiliario Anual Total:',
+    value=500000.0,
+    step=1000.0,
+    format="%.0f"  # CORRECCIÓN AQUÍ
 )
 impuesto_automotor = st.sidebar.number_input(
-    'Impuesto Automotor Anual Total:', value=300000.0, step=1000.0, format="$%f"
+    'Impuesto Automotor Anual Total:',
+    value=300000.0,
+    step=1000.0,
+    format="%.0f"  # CORRECIÓN AQUÍ
 )
 
 tiene_deuda = st.sidebar.radio(
