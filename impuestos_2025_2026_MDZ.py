@@ -1,8 +1,14 @@
-import ipywidgets as widgets
-from ipywidgets import Layout
-from IPython.display import display, clear_output
+# simulador_fiscal.py
+import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
+
+# --- CONFIGURACIÓN DE LA PÁGINA ---
+st.set_page_config(
+    page_title="Simulador Fiscal 2026",
+    page_icon="📊",
+    layout="wide"
+)
 
 # --- PARÁMETROS FISCALES 2026 (PROYECTO DE LEY) ---
 # Estos valores están basados en el proyecto de Ley Impositiva 2026
@@ -14,193 +20,159 @@ DESC_BUEN_CUMPLIDOR_ANO_ACTUAL = 0.10 # 10% por tener 2025 al día
 DESC_BUEN_CUMPLIDOR_ANO_ANT = 0.10  # 10% adicional por tener 2024 al día
 DESC_PAGO_ANUAL = 0.05             # 5% por cancelar el impuesto anual 2026 de una vez
 
-# --- CREACIÓN DE LA INTERFAZ DE USUARIO (WIDGETS) ---
-style = {'description_width': 'initial'}
-layout_amplio = Layout(width='80%')
+# --- CREACIÓN DE LA INTERFAZ DE USUARIO (WIDGETS EN LA BARRA LATERAL) ---
+st.sidebar.header("📊 Parámetros de la Simulación")
+st.sidebar.markdown("Ajusta los valores para ver el impacto en tiempo real.")
 
 # --- Widgets de Ingresos ---
-ingresos_anuales = widgets.FloatSlider(
-    value=400_000_000, min=0, max=5_000_000_000, step=1_000_000,
-    description='Ingresos Brutos Anuales (proyectados para 2025):',
-    style=style, layout=layout_amplio, readout_format=','
+ingresos_anuales = st.sidebar.slider(
+    'Ingresos Brutos Anuales (proyectados para 2025):',
+    min_value=0.0,
+    max_value=5_000_000_000.0,
+    value=400_000_000.0,
+    step=1_000_000.0,
+    format="$%f"
 )
-alicuota_general = widgets.FloatText(
-    value=4.0, description='Tu Alícuota General de IIBB (%):', style=style
-)
-alicuota_reducida = widgets.FloatText(
-    value=3.0, description='Tu Alícuota Reducida de IIBB (%):', style=style
-)
-alicuota_incrementada = widgets.FloatText(
-    value=5.0, description='Tu Alícuota Incrementada de IIBB (%):', style=style
-)
+
+st.sidebar.subheader("Tus Alícuotas de IIBB (%)")
+col1, col2, col3 = st.sidebar.columns(3)
+with col1:
+    alicuota_reducida = st.number_input('Reducida', value=3.0, step=0.1, format="%.2f")
+with col2:
+    alicuota_general = st.number_input('General', value=4.0, step=0.1, format="%.2f")
+with col3:
+    alicuota_incrementada = st.number_input('Incrementada', value=5.0, step=0.1, format="%.2f")
 
 # --- Widgets de Otros Impuestos y Beneficios ---
-impuesto_inmobiliario = widgets.FloatText(
-    value=500000, description='Impuesto Inmobiliario Anual Total:', style=style,
-    layout=Layout(width='300px')
+st.sidebar.subheader("Otros Impuestos Anuales")
+impuesto_inmobiliario = st.sidebar.number_input(
+    'Impuesto Inmobiliario Anual Total:', value=500000.0, step=1000.0, format="$%f"
 )
-impuesto_automotor = widgets.FloatText(
-    value=300000, description='Impuesto Automotor Anual Total:', style=style,
-    layout=Layout(width='300px')
-)
-tiene_deuda = widgets.RadioButtons(
-    options=['No, estoy al día', 'Sí, tengo deuda vencida'],
-    value='No, estoy al día', description='¿Tienes deuda vencida al 31/12/2025?:',
-    style=style, layout=Layout(width='auto')
+impuesto_automotor = st.sidebar.number_input(
+    'Impuesto Automotor Anual Total:', value=300000.0, step=1000.0, format="$%f"
 )
 
-# --- Contenedor para la salida de la simulación ---
-output = widgets.Output()
-
-# --- FUNCIÓN PRINCIPAL DE SIMULACIÓN ---
-def simular_impuestos(ingresos, alic_reducida, alic_general, alic_incrementada, inmob, autom, deuda):
-    with output:
-        clear_output(wait=True)
-
-        # 1. ANÁLISIS DE INGRESOS BRUTOS
-        if ingresos <= UMBRAL_ALICUOTA_REDUCIDA:
-            alicuota_aplicable = alic_reducida
-            # FIX: Changed :_, to :,
-            categoria = f"ALÍCUOTA REDUCIDA (hasta ${UMBRAL_ALICUOTA_REDUCIDA:,})"
-        elif ingresos > UMBRAL_ALICUOTA_INCREMENTADA:
-            alicuota_aplicable = alic_incrementada
-            # FIX: Changed :_, to :,
-            categoria = f"ALÍCUOTA INCREMENTADA (superior a ${UMBRAL_ALICUOTA_INCREMENTADA:,})"
-        else:
-            alicuota_aplicable = alic_general
-            categoria = "ALÍCUOTA GENERAL"
-
-        iibb_anual = ingresos * (alicuota_aplicable / 100)
-
-        # 2. ANÁLISIS DE BENEFICIOS POR CUMPLIMIENTO
-        cumplidor = (deuda == 'No, estoy al día')
-        ahorro_inmobiliario = 0
-        ahorro_automotor = 0
-
-        if cumplidor:
-            # Se asume que por estar al día, el contribuyente cumple los requisitos para todos los descuentos
-            ahorro_inmobiliario = inmob * (DESC_BUEN_CUMPLIDOR_ANO_ACTUAL + DESC_BUEN_CUMPLIDOR_ANO_ANT + DESC_PAGO_ANUAL)
-            ahorro_automotor = autom * (DESC_BUEN_CUMPLIDOR_ANO_ACTUAL + DESC_BUEN_CUMPLIDOR_ANO_ANT + DESC_PAGO_ANUAL)
-
-        inmobiliario_optimizado = inmob - ahorro_inmobiliario
-        automotor_optimizado = autom - ahorro_automotor
-        ahorro_total_cumplidor = ahorro_inmobiliario + ahorro_automotor
-
-        # 3. CÁLCULO DE TOTALES
-        total_sin_optimizar = iibb_anual + inmob + autom
-        total_optimizado = iibb_anual + inmobiliario_optimizado + automotor_optimizado
-
-        # --- MOSTRAR RESULTADOS ---
-        print("="*60)
-        print("📊 RESULTADOS DE LA SIMULACIÓN FISCAL 2026 (MENDOZA)")
-        print("="*60)
-
-        # Sección IIBB
-        print("\n--- 1. Impuesto sobre los Ingresos Brutos ---")
-        # FIX: Changed :_, to :,
-        print(f"Ingresos Anuales Proyectados: ${ingresos:,}")
-        print(f"Categoría de Alícuota Aplicable: {categoria}")
-        print(f"Alícuota Efectiva: {alicuota_aplicable:.2f}%")
-        # FIX: Changed :_,.2f to :_2f
-        print(f"Impuesto a los IIBB Anual Estimado: ${iibb_anual:,.2f}")
-
-        # Sección Beneficios
-        print("\n--- 2. Beneficios por Contribuyente Cumplidor ---")
-        if cumplidor:
-            print("¡EXCELENTE! Al no tener deudas, puedes acceder a importantes descuentos.")
-            # FIX: Changed :_,.2f to :_2f
-            print(f"Ahorro Potencial en Imp. Inmobiliario: ${ahorro_inmobiliario:,.2f}")
-            print(f"Ahorro Potencial en Imp. Automotor: ${ahorro_automotor:,.2f}")
-            print(f"AHORRO TOTAL POR BUEN CUMPLIMIENTO: ${ahorro_total_cumplidor:,.2f}")
-        else:
-            print("ATENCIÓN: Al tener deuda, no puedes acceder a los descuentos por buen cumplimiento.")
-            # FIX: Changed :_,.2f to :_2f
-            print(f"Costo de oportunidad (ahorro perdido): ${ahorro_total_cumplidor:,.2f}")
-
-
-        # Sección Resumen y Optimización
-        print("\n--- 3. Resumen y Recomendaciones de Optimización ---")
-        # FIX: Changed :_,.2f to :_2f
-        print(f"Carga Fiscal Total (Sin Optimizar): ${total_sin_optimizar:,.2f}")
-        print(f"Carga Fiscal Total (Optimizada): ${total_optimizado:,.2f}")
-
-        print("\n💡 RECOMENDACIONES:")
-        # Recomendación sobre IIBB
-        if UMBRAL_ALICUOTA_REDUCIDA < ingresos < UMBRAL_ALICUOTA_REDUCIDA * 1.1:
-            costo_extra = (ingresos * (alic_general / 100)) - (ingresos * (alic_reducida / 100))
-            # FIX: Changed :_, to :, and :_,.2f to :_2f
-            print(f"  - IIBB: Estás cerca de perder la alícuota reducida. Superar los ${UMBRAL_ALICUOTA_REDUCIDA:,} te costaría ${costo_extra:,.2f} adicionales en IIBB. Evalúa diferir facturación si es posible.")
-        elif UMBRAL_ALICUOTA_INCREMENTADA < ingresos < UMBRAL_ALICUOTA_INCREMENTADA * 1.1:
-             costo_extra = (ingresos * (alic_incrementada / 100)) - (ingresos * (alic_general / 100))
-             # FIX: Changed :_, to :, and :_,.2f to :_2f
-             print(f"  - IIBB: ¡Cuidado! Estás cerca de pasar a la alícuota incrementada. Superar los ${UMBRAL_ALICUOTA_INCREMENTADA:,} te costaría ${costo_extra:,.2f} adicionales. Es un punto crítico para la planificación fiscal.")
-        else:
-            print("  - IIBB: Tu nivel de ingresos te posiciona claramente en tu categoría actual. Monitorea tu facturación a fin de año.")
-
-        # Recomendación sobre cumplimiento
-        if not cumplidor:
-            # FIX: Changed :_,.2f to :_2f
-            print(f"  - CUMPLIMIENTO: La recomendación más importante es regularizar tu deuda. Hacerlo te permitiría ahorrar ${ahorro_total_cumplidor:,.2f} en otros impuestos.")
-        else:
-            print("  - CUMPLIMIENTO: ¡Felicitaciones! Mantenerte al día es la estrategia más rentable. Asegúrate de optar por el pago anual para maximizar los descuentos.")
-
-        # --- GRÁFICO COMPARATIVO ---
-        labels = ['IIBB', 'Inmobiliario', 'Automotor']
-        valores_sin_opt = [iibb_anual, inmob, autom]
-        valores_opt = [iibb_anual, inmobiliario_optimizado, automotor_optimizado]
-
-        x = np.arange(len(labels))
-        width = 0.35
-
-        fig, ax = plt.subplots(figsize=(10, 6))
-        rects1 = ax.bar(x - width/2, valores_sin_opt, width, label='Sin Optimizar', color='salmon')
-        rects2 = ax.bar(x + width/2, valores_opt, width, label='Optimizado (Cumplidor)', color='skyblue')
-
-        ax.set_ylabel('Monto Anual en $')
-        ax.set_title('Comparación de Carga Tributaria Anual')
-        ax.set_xticks(x)
-        ax.set_xticklabels(labels)
-        ax.legend()
-
-        # Formatear el eje y para que muestre números con separadores de miles
-        ax.get_yaxis().set_major_formatter(
-            plt.FuncFormatter(lambda y, p: format(int(y), ',')))
-
-        # FIX: Changed fmt='{:_,.0f}' to fmt='{:,.0f}'
-        ax.bar_label(rects1, padding=3, fmt='{:,.0f}')
-        ax.bar_label(rects2, padding=3, fmt='{:,.0f}')
-
-        fig.tight_layout()
-        plt.show()
-
-# --- VINCULAR LA INTERFAZ CON LA FUNCIÓN ---
-controles = widgets.VBox([
-    widgets.HTML("<h2>Simulador de Optimización Fiscal 2026 (Mendoza)</h2>"),
-    widgets.HTML("<p>Mueve el deslizador de ingresos y ajusta los otros valores para ver el impacto en tiempo real.</p>"),
-    ingresos_anuales,
-    widgets.HBox([alicuota_reducida, alicuota_general, alicuota_incrementada]),
-    widgets.HBox([impuesto_inmobiliario, impuesto_automotor]),
-    tiene_deuda
-])
-
-app = widgets.VBox([controles, output])
-
-# --- MOSTRAR LA APLICACIÓN ---
-# Ejecutar la simulación una vez al inicio con los valores por defecto
-simular_impuestos(
-    ingresos_anuales.value, alicuota_reducida.value, alicuota_general.value,
-    alicuota_incrementada.value, impuesto_inmobiliario.value,
-    impuesto_automotor.value, tiene_deuda.value
+tiene_deuda = st.sidebar.radio(
+    '¿Tienes deuda vencida al 31/12/2025?:',
+    ('No, estoy al día', 'Sí, tengo deuda vencida'),
+    index=0
 )
 
-# Registrar la función para que se actualice con cada cambio
-ingresos_anuales.observe(lambda change: simular_impuestos(change.new, alicuota_reducida.value, alicuota_general.value, alicuota_incrementada.value, impuesto_inmobiliario.value, impuesto_automotor.value, tiene_deuda.value), names='value')
-alicuota_reducida.observe(lambda change: simular_impuestos(ingresos_anuales.value, change.new, alicuota_general.value, alicuota_incrementada.value, impuesto_inmobiliario.value, impuesto_automotor.value, tiene_deuda.value), names='value')
-alicuota_general.observe(lambda change: simular_impuestos(ingresos_anuales.value, alicuota_reducida.value, change.new, alicuota_incrementada.value, impuesto_inmobiliario.value, impuesto_automotor.value, tiene_deuda.value), names='value')
-alicuota_incrementada.observe(lambda change: simular_impuestos(ingresos_anuales.value, alicuota_reducida.value, alicuota_general.value, change.new, impuesto_inmobiliario.value, impuesto_automotor.value, tiene_deuda.value), names='value')
-impuesto_inmobiliario.observe(lambda change: simular_impuestos(ingresos_anuales.value, alicuota_reducida.value, alicuota_general.value, alicuota_incrementada.value, change.new, impuesto_automotor.value, tiene_deuda.value), names='value')
-impuesto_automotor.observe(lambda change: simular_impuestos(ingresos_anuales.value, alicuota_reducida.value, alicuota_general.value, alicuota_incrementada.value, impuesto_inmobiliario.value, change.new, tiene_deuda.value), names='value')
-tiene_deuda.observe(lambda change: simular_impuestos(ingresos_anuales.value, alicuota_reducida.value, alicuota_general.value, alicuota_incrementada.value, impuesto_inmobiliario.value, impuesto_automotor.value, change.new), names='value')
+
+# --- TÍTULO Y DESCRIPCIÓN PRINCIPAL ---
+st.title("Simulador de Optimización Fiscal 2026 (Mendoza)")
+st.markdown("Esta herramienta te ayuda a proyectar tu carga fiscal para 2026 y a entender cómo las decisiones de cumplimiento pueden generar ahorros significativos.")
+
+# --- LÓGICA DE SIMULACIÓN Y VISUALIZACIÓN ---
+
+# 1. ANÁLISIS DE INGRESOS BRUTOS
+if ingresos_anuales <= UMBRAL_ALICUOTA_REDUCIDA:
+    alicuota_aplicable = alicuota_reducida
+    categoria = f"ALÍCUOTA REDUCIDA (hasta ${UMBRAL_ALICUOTA_REDUCIDA:,.0f})"
+elif ingresos_anuales > UMBRAL_ALICUOTA_INCREMENTADA:
+    alicuota_aplicable = alicuota_incrementada
+    categoria = f"ALÍCUOTA INCREMENTADA (superior a ${UMBRAL_ALICUOTA_INCREMENTADA:,.0f})"
+else:
+    alicuota_aplicable = alicuota_general
+    categoria = "ALÍCUOTA GENERAL"
+
+iibb_anual = ingresos_anuales * (alicuota_aplicable / 100)
+
+# 2. ANÁLISIS DE BENEFICIOS POR CUMPLIMIENTO
+cumplidor = (tiene_deuda == 'No, estoy al día')
+ahorro_inmobiliario = 0
+ahorro_automotor = 0
+
+if cumplidor:
+    # Se asume que por estar al día, el contribuyente cumple los requisitos para todos los descuentos
+    ahorro_inmobiliario = impuesto_inmobiliario * (DESC_BUEN_CUMPLIDOR_ANO_ACTUAL + DESC_BUEN_CUMPLIDOR_ANO_ANT + DESC_PAGO_ANUAL)
+    ahorro_automotor = impuesto_automotor * (DESC_BUEN_CUMPLIDOR_ANO_ACTUAL + DESC_BUEN_CUMPLIDOR_ANO_ANT + DESC_PAGO_ANUAL)
+
+inmobiliario_optimizado = impuesto_inmobiliario - ahorro_inmobiliario
+automotor_optimizado = impuesto_automotor - ahorro_automotor
+ahorro_total_cumplidor = ahorro_inmobiliario + ahorro_automotor
+
+# 3. CÁLCULO DE TOTALES
+total_sin_optimizar = iibb_anual + impuesto_inmobiliario + impuesto_automotor
+total_optimizado = iibb_anual + inmobiliario_optimizado + automotor_optimizado
 
 
-display(app)
+# --- MOSTRAR RESULTADOS ---
+st.header("📊 Resultados de la Simulación")
+
+resumen_col1, resumen_col2 = st.columns(2)
+
+with resumen_col1:
+    st.metric(label="Carga Fiscal Total (Sin Optimizar)", value=f"${total_sin_optimizar:,.2f}")
+with resumen_col2:
+    st.metric(label="Carga Fiscal Total (Optimizada)", value=f"${total_optimizado:,.2f}", delta=f"-${ahorro_total_cumplidor:,.2f}", delta_color="inverse")
+
+
+# --- Contenedores para detalles ---
+with st.expander("Ver detalle del cálculo y recomendaciones", expanded=True):
+
+    st.subheader("1. Impuesto sobre los Ingresos Brutos")
+    st.markdown(f"**Ingresos Anuales Proyectados:** `${ingresos_anuales:,.2f}`")
+    st.markdown(f"**Categoría de Alícuota Aplicable:** `{categoria}`")
+    st.markdown(f"**Alícuota Efectiva:** `{alicuota_aplicable:.2f}%`")
+    st.success(f"**Impuesto a los IIBB Anual Estimado: ${iibb_anual:,.2f}**")
+
+    st.subheader("2. Beneficios por Contribuyente Cumplidor")
+    if cumplidor:
+        st.info("¡EXCELENTE! Al no tener deudas, puedes acceder a importantes descuentos.")
+        col_ben1, col_ben2, col_ben3 = st.columns(3)
+        col_ben1.metric("Ahorro Inmobiliario", f"${ahorro_inmobiliario:,.2f}")
+        col_ben2.metric("Ahorro Automotor", f"${ahorro_automotor:,.2f}")
+        col_ben3.metric("AHORRO TOTAL", f"${ahorro_total_cumplidor:,.2f}")
+    else:
+        st.warning("ATENCIÓN: Al tener deuda, no puedes acceder a los descuentos por buen cumplimiento.")
+        st.metric("Costo de oportunidad (ahorro perdido):", f"${ahorro_total_cumplidor:,.2f}")
+
+    st.subheader("💡 Recomendaciones de Optimización")
+    # Recomendación sobre IIBB
+    if UMBRAL_ALICUOTA_REDUCIDA < ingresos_anuales < UMBRAL_ALICUOTA_REDUCIDA * 1.1:
+        costo_extra = (ingresos_anuales * (alicuota_general / 100)) - (ingresos_anuales * (alicuota_reducida / 100))
+        st.markdown(f"  - **IIBB:** Estás cerca de perder la alícuota reducida. Superar los `${UMBRAL_ALICUOTA_REDUCIDA:,}` te costaría `${costo_extra:,.2f}` adicionales. Evalúa diferir facturación si es posible.")
+    elif UMBRAL_ALICUOTA_INCREMENTADA < ingresos_anuales < UMBRAL_ALICUOTA_INCREMENTADA * 1.1:
+         costo_extra = (ingresos_anuales * (alicuota_incrementada / 100)) - (ingresos_anuales * (alicuota_general / 100))
+         st.markdown(f"  - **IIBB:** ¡Cuidado! Estás cerca de pasar a la alícuota incrementada. Superar los `${UMBRAL_ALICUOTA_INCREMENTADA:,}` te costaría `${costo_extra:,.2f}` adicionales. Es un punto crítico para la planificación fiscal.")
+    else:
+        st.markdown("  - **IIBB:** Tu nivel de ingresos te posiciona claramente en tu categoría actual. Monitorea tu facturación a fin de año.")
+
+    # Recomendación sobre cumplimiento
+    if not cumplidor:
+        st.markdown(f"  - **CUMPLIMIENTO:** La recomendación más importante es regularizar tu deuda. Hacerlo te permitiría ahorrar **`${ahorro_total_cumplidor:,.2f}`** en otros impuestos.")
+    else:
+        st.markdown("  - **CUMPLIMIENTO:** ¡Felicitaciones! Mantenerte al día es la estrategia más rentable. Asegúrate de optar por el pago anual para maximizar los descuentos.")
+
+
+# --- GRÁFICO COMPARATIVO ---
+st.header("Comparación Gráfica de la Carga Tributaria")
+labels = ['IIBB', 'Inmobiliario', 'Automotor']
+valores_sin_opt = [iibb_anual, impuesto_inmobiliario, impuesto_automotor]
+valores_opt = [iibb_anual, inmobiliario_optimizado, automotor_optimizado]
+
+x = np.arange(len(labels))
+width = 0.35
+
+fig, ax = plt.subplots(figsize=(10, 6))
+rects1 = ax.bar(x - width/2, valores_sin_opt, width, label='Sin Optimizar', color='salmon')
+rects2 = ax.bar(x + width/2, valores_opt, width, label='Optimizado (Cumplidor)', color='skyblue')
+
+ax.set_ylabel('Monto Anual en $')
+ax.set_title('Comparación de Carga Tributaria Anual')
+ax.set_xticks(x)
+ax.set_xticklabels(labels)
+ax.legend()
+
+# Formatear el eje y para que muestre números con separadores de miles
+ax.get_yaxis().set_major_formatter(
+    plt.FuncFormatter(lambda y, p: format(int(y), ',')))
+
+ax.bar_label(rects1, padding=3, fmt='{:,.0f}')
+ax.bar_label(rects2, padding=3, fmt='{:,.0f}')
+
+fig.tight_layout()
+
+# Mostrar el gráfico en Streamlit
+st.pyplot(fig)
